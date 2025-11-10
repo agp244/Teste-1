@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minhas Finanças</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center p-4">
+
+  <h1 class="text-2xl font-bold mb-4 text-indigo-600">💰 Minhas Finanças</h1>
+
+  <!-- Saldo -->
+  <div class="bg-white shadow-md rounded-2xl w-full p-4 text-center">
+    <h2 class="text-gray-500 text-sm">Saldo Atual</h2>
+    <p id="saldo" class="text-3xl font-semibold text-green-600">R$ 0,00</p>
+  </div>
+
+  <!-- Lista -->
+  <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4 max-h-64 overflow-y-auto">
+    <h3 class="font-semibold text-gray-700 mb-2">Transações</h3>
+    <ul id="lista" class="text-sm text-gray-600 space-y-2"></ul>
+  </div>
+
+  <!-- Gráficos -->
+  <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4">
+    <h3 class="font-semibold text-gray-700 mb-2">Gráfico por Categoria</h3>
+    <canvas id="graficoPizza" height="150"></canvas>
+  </div>
+
+  <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4">
+    <h3 class="font-semibold text-gray-700 mb-2">Ganhos x Gastos (Mês)</h3>
+    <canvas id="graficoBarras" height="150"></canvas>
+  </div>
+
+  <!-- Botão flutuante -->
+  <button id="btnAdd"
+    class="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-full w-14 h-14 text-3xl shadow-lg">
+    +
+  </button>
+
+  <!-- Modal -->
+  <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl p-6 w-80">
+      <h3 class="text-lg font-semibold text-center mb-4">Nova Transação</h3>
+      <input id="descricao" type="text" placeholder="Descrição"
+        class="border p-2 w-full rounded mb-2" />
+      <input id="valor" type="number" placeholder="Valor (R$)"
+        class="border p-2 w-full rounded mb-2" />
+      <select id="tipo" class="border p-2 w-full rounded mb-2">
+        <option value="entrada">Entrada</option>
+        <option value="saida">Saída</option>
+      </select>
+      <input id="categoria" type="text" placeholder="Categoria"
+        class="border p-2 w-full rounded mb-4" />
+      <div class="flex justify-between">
+        <button id="cancelar" class="bg-gray-300 px-4 py-2 rounded">Cancelar</button>
+        <button id="salvar" class="bg-indigo-600 text-white px-4 py-2 rounded">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const lista = document.getElementById('lista');
+    const saldoEl = document.getElementById('saldo');
+    const btnAdd = document.getElementById('btnAdd');
+    const modal = document.getElementById('modal');
+    const cancelar = document.getElementById('cancelar');
+    const salvar = document.getElementById('salvar');
+    let transacoes = JSON.parse(localStorage.getItem('transacoes')) || [];
+
+    function atualizar() {
+      lista.innerHTML = '';
+      let saldo = 0;
+      let categorias = {};
+      let ganhos = 0, gastos = 0;
+
+      transacoes.forEach(t => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <div class="flex justify-between">
+            <span>${t.descricao} (${t.categoria})</span>
+            <span class="${t.tipo === 'entrada' ? 'text-green-500' : 'text-red-500'}">
+              ${t.tipo === 'entrada' ? '+' : '-'} R$ ${t.valor.toFixed(2)}
+            </span>
+          </div>`;
+        lista.appendChild(li);
+
+        if (t.tipo === 'entrada') {
+          saldo += t.valor;
+          ganhos += t.valor;
+        } else {
+          saldo -= t.valor;
+          gastos += t.valor;
+        }
+
+        categorias[t.categoria] = (categorias[t.categoria] || 0) + t.valor;
+      });
+
+      saldoEl.textContent = `R$ ${saldo.toFixed(2)}`;
+      localStorage.setItem('transacoes', JSON.stringify(transacoes));
+
+      // Atualiza gráficos
+      atualizarGraficos(categorias, ganhos, gastos);
+    }
+
+    function atualizarGraficos(categorias, ganhos, gastos) {
+      const ctxPizza = document.getElementById('graficoPizza');
+      const ctxBarras = document.getElementById('graficoBarras');
+
+      if (window.pizzaChart) window.pizzaChart.destroy();
+      if (window.barrasChart) window.barrasChart.destroy();
+
+      window.pizzaChart = new Chart(ctxPizza, {
+        type: 'pie',
+        data: {
+          labels: Object.keys(categorias),
+          datasets: [{
+            data: Object.values(categorias),
+            backgroundColor: ['#4ade80','#60a5fa','#f87171','#facc15','#a78bfa','#fb923c'],
+          }]
+        }
+      });
+
+      window.barrasChart = new Chart(ctxBarras, {
+        type: 'bar',
+        data: {
+          labels: ['Ganhos', 'Gastos'],
+          datasets: [{
+            label: 'R$',
+            data: [ganhos, gastos],
+            backgroundColor: ['#22c55e','#ef4444'],
+          }]
+        }
+      });
+    }
+
+    btnAdd.onclick = () => modal.classList.remove('hidden');
+    cancelar.onclick = () => modal.classList.add('hidden');
+
+    salvar.onclick = () => {
+      const descricao = document.getElementById('descricao').value;
+      const valor = parseFloat(document.getElementById('valor').value);
+      const tipo = document.getElementById('tipo').value;
+      const categoria = document.getElementById('categoria').value;
+
+      if (!descricao || !valor || !categoria) {
+        alert('Preencha todos os campos!');
+        return;
+      }
+
+      transacoes.push({ descricao, valor, tipo, categoria });
+      modal.classList.add('hidden');
+      document.querySelectorAll('#modal input').forEach(i => i.value = '');
+      atualizar();
+    };
+
+    atualizar();
+  </script>
+</body>
+</html>
