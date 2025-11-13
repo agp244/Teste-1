@@ -1,37 +1,66 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Minhas Finanças</title>
+
+  <!-- Tailwind e Chart.js -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* pequeno ajuste para rolagem suave em mobile */
+    ::-webkit-scrollbar { height: 8px; width: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 8px; }
+  </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col items-center p-4">
 
   <h1 class="text-2xl font-bold mb-4 text-indigo-600">💰 Minhas Finanças</h1>
 
-  <!-- Saldo -->
+  <!-- Cartão de saldo -->
   <div class="bg-white shadow-md rounded-2xl w-full p-4 text-center">
     <h2 class="text-gray-500 text-sm">Saldo Atual</h2>
     <p id="saldo" class="text-3xl font-semibold text-green-600">R$ 0,00</p>
   </div>
 
+  <!-- Filtros -->
+  <div class="bg-white shadow-md rounded-2xl w-full p-3 mt-4 flex gap-2 items-center overflow-x-auto">
+    <select id="filtroPeriodo" class="border p-2 rounded text-sm">
+      <option value="all">Todos os meses</option>
+    </select>
+
+    <select id="filtroCategoria" class="border p-2 rounded text-sm">
+      <option value="all">Todas as categorias</option>
+    </select>
+
+    <button id="limparFiltros" class="ml-auto bg-gray-200 px-3 py-1 rounded text-sm">Limpar</button>
+  </div>
+
   <!-- Lista -->
-  <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4 max-h-64 overflow-y-auto">
-    <h3 class="font-semibold text-gray-700 mb-2">Transações</h3>
+  <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4 max-h-56 overflow-y-auto">
+    <h3 class="font-semibold text-gray-700 mb-2 flex items-center justify-between">
+      <span>Transações</span>
+      <span id="contador" class="text-xs text-gray-500">0</span>
+    </h3>
     <ul id="lista" class="text-sm text-gray-600 space-y-2"></ul>
   </div>
 
-  <!-- Gráficos -->
+  <!-- Gráficos e relatório -->
   <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4">
-    <h3 class="font-semibold text-gray-700 mb-2">Gráfico por Categoria</h3>
+    <h3 class="font-semibold text-gray-700 mb-2">Gráfico por Categoria (período filtrado)</h3>
     <canvas id="graficoPizza" height="150"></canvas>
   </div>
 
   <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4">
-    <h3 class="font-semibold text-gray-700 mb-2">Ganhos x Gastos (Mês)</h3>
+    <h3 class="font-semibold text-gray-700 mb-2">Ganhos x Gastos (período filtrado)</h3>
     <canvas id="graficoBarras" height="150"></canvas>
+  </div>
+
+  <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4 mb-20">
+    <h3 class="font-semibold text-gray-700 mb-2">Relatório detalhado por categoria</h3>
+    <div id="relatorioTabela" class="text-sm text-gray-700"></div>
   </div>
 
   <!-- Botão flutuante -->
@@ -40,20 +69,29 @@
     +
   </button>
 
-  <!-- Modal -->
-  <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <!-- Modal (novo/editar) -->
+  <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl p-6 w-80">
-      <h3 class="text-lg font-semibold text-center mb-4">Nova Transação</h3>
+      <h3 id="modalTitulo" class="text-lg font-semibold text-center mb-4">Nova Transação</h3>
+
       <input id="descricao" type="text" placeholder="Descrição"
         class="border p-2 w-full rounded mb-2" />
-      <input id="valor" type="number" placeholder="Valor (R$)"
+
+      <input id="valor" type="number" step="0.01" placeholder="Valor (R$)"
         class="border p-2 w-full rounded mb-2" />
-      <select id="tipo" class="border p-2 w-full rounded mb-2">
-        <option value="entrada">Entrada</option>
-        <option value="saida">Saída</option>
-      </select>
-      <input id="categoria" type="text" placeholder="Categoria"
+
+      <div class="flex gap-2 mb-2">
+        <select id="tipo" class="border p-2 w-1/2 rounded">
+          <option value="entrada">Entrada</option>
+          <option value="saida">Saída</option>
+        </select>
+
+        <input id="data" type="date" class="border p-2 w-1/2 rounded" />
+      </div>
+
+      <input id="categoria" type="text" placeholder="Categoria (ex: Mercado)"
         class="border p-2 w-full rounded mb-4" />
+
       <div class="flex justify-between">
         <button id="cancelar" class="bg-gray-300 px-4 py-2 rounded">Cancelar</button>
         <button id="salvar" class="bg-indigo-600 text-white px-4 py-2 rounded">Salvar</button>
@@ -61,102 +99,386 @@
     </div>
   </div>
 
-  <script>
-    const lista = document.getElementById('lista');
-    const saldoEl = document.getElementById('saldo');
-    const btnAdd = document.getElementById('btnAdd');
-    const modal = document.getElementById('modal');
-    const cancelar = document.getElementById('cancelar');
-    const salvar = document.getElementById('salvar');
-    let transacoes = JSON.parse(localStorage.getItem('transacoes')) || [];
+<script>
+/* --------------- armazenamento e estado --------------- */
+const STORAGE_KEY = 'minhas_financas_transacoes_v1';
+let transacoes = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
 
-    function atualizar() {
-      lista.innerHTML = '';
-      let saldo = 0;
-      let categorias = {};
-      let ganhos = 0, gastos = 0;
+/* elemento DOM */
+const listaEl = document.getElementById('lista');
+const saldoEl = document.getElementById('saldo');
+const contadorEl = document.getElementById('contador');
+const btnAdd = document.getElementById('btnAdd');
+const modal = document.getElementById('modal');
+const cancelar = document.getElementById('cancelar');
+const salvar = document.getElementById('salvar');
+const descricaoInput = document.getElementById('descricao');
+const valorInput = document.getElementById('valor');
+const tipoInput = document.getElementById('tipo');
+const categoriaInput = document.getElementById('categoria');
+const dataInput = document.getElementById('data');
+const modalTitulo = document.getElementById('modalTitulo');
 
-      transacoes.forEach(t => {
-        const li = document.createElement('li');
-        li.innerHTML = `
-          <div class="flex justify-between">
-            <span>${t.descricao} (${t.categoria})</span>
-            <span class="${t.tipo === 'entrada' ? 'text-green-500' : 'text-red-500'}">
-              ${t.tipo === 'entrada' ? '+' : '-'} R$ ${t.valor.toFixed(2)}
-            </span>
-          </div>`;
-        lista.appendChild(li);
+const filtroPeriodo = document.getElementById('filtroPeriodo');
+const filtroCategoria = document.getElementById('filtroCategoria');
+const limparFiltrosBtn = document.getElementById('limparFiltros');
 
-        if (t.tipo === 'entrada') {
-          saldo += t.valor;
-          ganhos += t.valor;
-        } else {
-          saldo -= t.valor;
-          gastos += t.valor;
-        }
+const relatorioTabela = document.getElementById('relatorioTabela');
 
-        categorias[t.categoria] = (categorias[t.categoria] || 0) + t.valor;
-      });
+let editingIndex = null;
 
-      saldoEl.textContent = `R$ ${saldo.toFixed(2)}`;
-      localStorage.setItem('transacoes', JSON.stringify(transacoes));
+/* Charts */
+let pizzaChart = null;
+let barrasChart = null;
 
-      // Atualiza gráficos
-      atualizarGraficos(categorias, ganhos, gastos);
+/* Inicialização - define data atual no modal por padrão */
+function dataHojeFormatada() {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/* --------------- funções principais --------------- */
+
+function salvarLocal() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(transacoes));
+}
+
+function abrirModalParaNovo() {
+  editingIndex = null;
+  modalTitulo.textContent = 'Nova Transação';
+  descricaoInput.value = '';
+  valorInput.value = '';
+  tipoInput.value = 'saida';
+  categoriaInput.value = '';
+  dataInput.value = dataHojeFormatada();
+  modal.classList.remove('hidden');
+  descricaoInput.focus();
+}
+
+function abrirModalParaEditar(idx) {
+  const t = transacoes[idx];
+  if (!t) return;
+  editingIndex = idx;
+  modalTitulo.textContent = 'Editar Transação';
+  descricaoInput.value = t.descricao;
+  valorInput.value = t.valor;
+  tipoInput.value = t.tipo;
+  categoriaInput.value = t.categoria;
+  // data salva no formato YYYY-MM-DD
+  dataInput.value = t.data || dataHojeFormatada();
+  modal.classList.remove('hidden');
+  descricaoInput.focus();
+}
+
+function fecharModal() {
+  modal.classList.add('hidden');
+}
+
+function adicionarOuEditar() {
+  const descricao = descricaoInput.value.trim();
+  const valor = parseFloat(valorInput.value);
+  const tipo = tipoInput.value;
+  const categoria = categoriaInput.value.trim() || 'Sem categoria';
+  const data = dataInput.value || dataHojeFormatada();
+
+  if (!descricao || !valor || isNaN(valor)) {
+    alert('Preencha descrição e valor corretamente.');
+    return;
+  }
+
+  const novo = { descricao, valor: Math.abs(valor), tipo, categoria, data };
+
+  if (editingIndex === null) {
+    transacoes.push(novo);
+  } else {
+    transacoes[editingIndex] = novo;
+  }
+
+  salvarLocal();
+  fecharModal();
+  atualizarTudo();
+}
+
+/* excluir transaction */
+function excluirTransacao(index) {
+  if (!confirm('Deseja excluir esta transação?')) return;
+  transacoes.splice(index, 1);
+  salvarLocal();
+  atualizarTudo();
+}
+
+/* aplica filtros atuais e retorna lista filtrada */
+function obterTransacoesFiltradas() {
+  const periodo = filtroPeriodo.value; // format: "YYYY-MM" or "all"
+  const categoriaSel = filtroCategoria.value; // category or all
+  return transacoes.filter(t => {
+    let okPeriodo = true;
+    if (periodo !== 'all') {
+      // periodo "YYYY-MM"
+      okPeriodo = t.data && t.data.startsWith(periodo);
     }
+    let okCategoria = (categoriaSel === 'all') || (t.categoria === categoriaSel);
+    return okPeriodo && okCategoria;
+  });
+}
 
-    function atualizarGraficos(categorias, ganhos, gastos) {
-      const ctxPizza = document.getElementById('graficoPizza');
-      const ctxBarras = document.getElementById('graficoBarras');
-
-      if (window.pizzaChart) window.pizzaChart.destroy();
-      if (window.barrasChart) window.barrasChart.destroy();
-
-      window.pizzaChart = new Chart(ctxPizza, {
-        type: 'pie',
-        data: {
-          labels: Object.keys(categorias),
-          datasets: [{
-            data: Object.values(categorias),
-            backgroundColor: ['#4ade80','#60a5fa','#f87171','#facc15','#a78bfa','#fb923c'],
-          }]
-        }
-      });
-
-      window.barrasChart = new Chart(ctxBarras, {
-        type: 'bar',
-        data: {
-          labels: ['Ganhos', 'Gastos'],
-          datasets: [{
-            label: 'R$',
-            data: [ganhos, gastos],
-            backgroundColor: ['#22c55e','#ef4444'],
-          }]
-        }
-      });
+/* atualiza selects de filtros com opções dinâmicas */
+function atualizarOpcoesFiltros() {
+  // períodos únicos (YYYY-MM)
+  const periodos = new Set();
+  const categorias = new Set();
+  transacoes.forEach(t => {
+    if (t.data) {
+      const ym = t.data.slice(0,7); // YYYY-MM
+      periodos.add(ym);
     }
+    categorias.add(t.categoria || 'Sem categoria');
+  });
 
-    btnAdd.onclick = () => modal.classList.remove('hidden');
-    cancelar.onclick = () => modal.classList.add('hidden');
+  // ordena desc por data (mais recente primeiro)
+  const periodosArr = Array.from(periodos).sort((a,b)=> b.localeCompare(a));
+  // clear and rebuild
+  filtroPeriodo.innerHTML = '<option value="all">Todos os meses</option>';
+  periodosArr.forEach(p => {
+    // mostra mês legível: "2025-02" -> "Fev/2025"
+    const [y,m] = p.split('-');
+    const date = new Date(`${p}-01`);
+    const label = date.toLocaleString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '');
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+    filtroPeriodo.appendChild(opt);
+  });
 
-    salvar.onclick = () => {
-      const descricao = document.getElementById('descricao').value;
-      const valor = parseFloat(document.getElementById('valor').value);
-      const tipo = document.getElementById('tipo').value;
-      const categoria = document.getElementById('categoria').value;
+  // categorias
+  const categoriasArr = Array.from(categorias).sort((a,b)=> a.localeCompare(b));
+  filtroCategoria.innerHTML = '<option value="all">Todas as categorias</option>';
+  categoriasArr.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    filtroCategoria.appendChild(opt);
+  });
+}
 
-      if (!descricao || !valor || !categoria) {
-        alert('Preencha todos os campos!');
-        return;
+/* renderiza a lista na tela (com botões editar/excluir) */
+function renderizarLista() {
+  const arr = obterTransacoesFiltradas();
+  listaEl.innerHTML = '';
+
+  if (arr.length === 0) {
+    listaEl.innerHTML = '<li class="text-gray-400">Nenhuma transação</li>';
+  }
+
+  arr.forEach((t, iFiltered) => {
+    // precisamos do índice original
+    // encontra a primeira ocorrência igual na lista original a partir de um offset
+    // mais simples: percorre transacoes e monta mapping id — mas como não temos id, usamos indexOf com cuidado.
+    // aqui vamos obter o index original buscando o obj por igualdade de campos + primeira combinação
+    const indexOriginal = transacoes.findIndex(tt =>
+      tt.descricao === t.descricao &&
+      tt.valor === t.valor &&
+      tt.tipo === t.tipo &&
+      tt.categoria === t.categoria &&
+      tt.data === t.data
+    );
+
+    const li = document.createElement('li');
+    li.className = 'flex justify-between items-start';
+
+    const left = document.createElement('div');
+    left.className = 'flex flex-col';
+    const descricao = document.createElement('span');
+    descricao.className = 'font-medium text-gray-700';
+    descricao.textContent = t.descricao;
+    const meta = document.createElement('span');
+    meta.className = 'text-xs text-gray-500';
+    const dataFmt = new Date(t.data).toLocaleDateString('pt-BR');
+    meta.textContent = `${t.categoria} • ${dataFmt}`;
+    left.appendChild(descricao);
+    left.appendChild(meta);
+
+    const right = document.createElement('div');
+    right.className = 'flex flex-col items-end gap-1';
+    const valor = document.createElement('span');
+    valor.className = t.tipo === 'entrada' ? 'text-green-500 font-semibold' : 'text-red-500 font-semibold';
+    const sinal = t.tipo === 'entrada' ? '+' : '-';
+    valor.textContent = `${sinal} R$ ${Number(t.valor).toFixed(2)}`;
+
+    const botoes = document.createElement('div');
+    botoes.className = 'flex gap-2 mt-1';
+
+    const btnEditar = document.createElement('button');
+    btnEditar.className = 'text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded';
+    btnEditar.textContent = 'Editar';
+    btnEditar.onclick = () => abrirModalParaEditar(indexOriginal);
+
+    const btnExcluir = document.createElement('button');
+    btnExcluir.className = 'text-xs bg-red-50 text-red-600 px-2 py-1 rounded';
+    btnExcluir.textContent = 'Excluir';
+    btnExcluir.onclick = () => excluirTransacao(indexOriginal);
+
+    botoes.appendChild(btnEditar);
+    botoes.appendChild(btnExcluir);
+
+    right.appendChild(valor);
+    right.appendChild(botoes);
+
+    li.appendChild(left);
+    li.appendChild(right);
+
+    listaEl.appendChild(li);
+  });
+
+  contadorEl.textContent = `${arr.length} lançamentos`;
+}
+
+/* calcular saldo e totais para gráficos */
+function calcularTotais(transacoesFiltradas) {
+  let saldo = 0;
+  let ganhos = 0, gastos = 0;
+  const categorias = {}; // categoria -> soma (tanto entradas quanto saídas como valor absoluto para categoria, mas para saídas mantemos soma de saídas)
+
+  transacoesFiltradas.forEach(t => {
+    if (t.tipo === 'entrada') {
+      saldo += t.valor;
+      ganhos += t.valor;
+    } else {
+      saldo -= t.valor;
+      gastos += t.valor;
+    }
+    categorias[t.categoria] = (categorias[t.categoria] || 0) + t.valor;
+  });
+
+  return { saldo, ganhos, gastos, categorias };
+}
+
+/* atualizar gráficos com dados do filtro */
+function atualizarGraficos() {
+  const fil = obterTransacoesFiltradas();
+  const { saldo, ganhos, gastos, categorias } = calcularTotais(fil);
+
+  // Saldo
+  saldoEl.textContent = `R$ ${saldo.toFixed(2)}`;
+  if (saldo >= 0) {
+    saldoEl.classList.remove('text-red-600');
+    saldoEl.classList.add('text-green-600');
+  } else {
+    saldoEl.classList.remove('text-green-600');
+    saldoEl.classList.add('text-red-600');
+  }
+
+  // Pizza por categoria
+  const ctxPizza = document.getElementById('graficoPizza');
+  if (pizzaChart) pizzaChart.destroy();
+  const labels = Object.keys(categorias);
+  const data = Object.values(categorias);
+  pizzaChart = new Chart(ctxPizza, {
+    type: 'pie',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: generateColors(labels.length)
+      }]
+    },
+    options: {
+      plugins: {
+        tooltip: { callbacks: { label: ctx => `R$ ${Number(ctx.raw).toFixed(2)}` } }
       }
+    }
+  });
 
-      transacoes.push({ descricao, valor, tipo, categoria });
-      modal.classList.add('hidden');
-      document.querySelectorAll('#modal input').forEach(i => i.value = '');
-      atualizar();
-    };
+  // Barras Ganhos x Gastos
+  const ctxBarras = document.getElementById('graficoBarras');
+  if (barrasChart) barrasChart.destroy();
+  barrasChart = new Chart(ctxBarras, {
+    type: 'bar',
+    data: {
+      labels: ['Ganhos', 'Gastos'],
+      datasets: [{
+        label: 'R$',
+        data: [ganhos, gastos],
+        backgroundColor: ['#22c55e', '#ef4444']
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } }
+    }
+  });
 
-    atualizar();
-  </script>
-</body>
-</html>
+  // relatório detalhado
+  atualizarRelatorioTabela(categorias);
+}
+
+/* monta tabela de relatório por categoria */
+function atualizarRelatorioTabela(categoriasObj) {
+  const rows = Object.entries(categoriasObj).sort((a,b)=> b[1]-a[1]);
+  if (rows.length === 0) {
+    relatorioTabela.innerHTML = '<div class="text-gray-400 text-sm">Sem dados para exibir no período.</div>';
+    return;
+  }
+
+  const total = rows.reduce((s, r) => s + r[1], 0);
+  let html = '<table class="w-full text-sm"><thead><tr class="text-left text-xs text-gray-500"><th>Categoria</th><th class="text-right">Total</th><th class="text-right">%</th></tr></thead><tbody>';
+  rows.forEach(([cat, val]) => {
+    const pct = total === 0 ? 0 : (val/total*100);
+    html += `<tr class="border-t"><td class="py-2">${cat}</td><td class="py-2 text-right">R$ ${Number(val).toFixed(2)}</td><td class="py-2 text-right">${pct.toFixed(1)}%</td></tr>`;
+  });
+  html += `</tbody><tfoot class="border-t"><tr class="font-semibold"><td class="pt-2">Total</td><td class="pt-2 text-right">R$ ${total.toFixed(2)}</td><td class="pt-2 text-right">100%</td></tr></tfoot></table>`;
+
+  relatorioTabela.innerHTML = html;
+}
+
+/* utilitário cores */
+function generateColors(n) {
+  const pal = ['#4ade80','#60a5fa','#f87171','#facc15','#a78bfa','#fb923c','#34d399','#f97316','#60a5fa','#fda4af'];
+  const out = [];
+  for (let i=0;i<n;i++) out.push(pal[i % pal.length]);
+  return out;
+}
+
+/* atualização completa (filtros, lista, gráficos) */
+function atualizarTudo() {
+  // atualiza opções de filtros com base nas transacoes completas
+  atualizarOpcoesFiltros();
+  // renderiza lista de acordo com filtros
+  renderizarLista();
+  // atualiza gráficos de acordo com filtros
+  atualizarGraficos();
+  // salva
+  salvarLocal();
+}
+
+/* limpar filtros */
+function limparFiltros() {
+  filtroPeriodo.value = 'all';
+  filtroCategoria.value = 'all';
+  atualizarTudo();
+}
+
+/* --------------- eventos --------------- */
+
+btnAdd.onclick = abrirModalParaNovo;
+cancelar.onclick = fecharModal;
+salvar.onclick = adicionarOuEditar;
+
+limparFiltrosBtn.onclick = limparFiltros;
+
+filtroPeriodo.onchange = () => {
+  // quando muda mês, reset category selection to 'all' (optionally keep)
+  // manter categoria, apenas atualizar exibição
+  atualizarTudo();
+};
+filtroCategoria.onchange = () => atualizarTudo();
+
+modal.addEventListener('click', (e) => {
+  if (e.target === modal) fecharModal();
+});
+
+/* permite salvar com Enter dentro do modal (quando fóco estiver no input) */
+[descricaoInput, valorInput, categoriaInput, dataInput].forEach(inp => {
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter')
