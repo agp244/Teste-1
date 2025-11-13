@@ -1,484 +1,536 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Minhas Finanças</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Minhas Finanças — Dashboard</title>
 
-  <!-- Tailwind e Chart.js -->
+  <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    /* pequeno ajuste para rolagem suave em mobile */
-    ::-webkit-scrollbar { height: 8px; width: 8px; }
-    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 8px; }
+    /* Scrollbar mobile */
+    ::-webkit-scrollbar { height:8px; width:8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius:8px; }
+    /* small animations */
+    .card-appear { transform-origin: center; transition: transform .18s ease, box-shadow .18s ease; }
+    .card-appear:active { transform: scale(.995); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
   </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col items-center p-4">
+<body class="bg-gradient-to-b from-gray-50 to-white min-h-screen p-4 font-sans">
 
-  <h1 class="text-2xl font-bold mb-4 text-indigo-600">💰 Minhas Finanças</h1>
+  <!-- Top: Saldo Geral -->
+  <header class="mb-4">
+    <div class="bg-white/80 backdrop-blur-sm rounded-3xl p-4 shadow-lg flex items-center gap-4">
+      <div class="flex-1">
+        <div class="text-xs text-gray-500">Saldo Geral</div>
+        <div id="saldoGeral" class="text-3xl font-extrabold">R$ 0,00</div>
+        <div id="subSaldos" class="text-xs text-gray-500 mt-1">—</div>
+      </div>
+      <div class="w-20 h-20 rounded-xl flex items-center justify-center bg-gradient-to-br from-indigo-500 to-indigo-400 text-white shadow">
+        <div class="text-center text-sm">
+          <div class="text-xs">App</div>
+          <div class="font-semibold">Finanças</div>
+        </div>
+      </div>
+    </div>
+  </header>
 
-  <!-- Cartão de saldo -->
-  <div class="bg-white shadow-md rounded-2xl w-full p-4 text-center">
-    <h2 class="text-gray-500 text-sm">Saldo Atual</h2>
-    <p id="saldo" class="text-3xl font-semibold text-green-600">R$ 0,00</p>
-  </div>
+  <!-- Abas (áreas) -->
+  <nav class="mb-4">
+    <div class="grid grid-cols-5 gap-2">
+      <button data-area="geral" class="area-btn bg-white card-appear rounded-xl p-3 text-center shadow-sm active">
+        <div class="text-sm font-semibold text-indigo-600">Geral</div>
+      </button>
+      <button data-area="cofrinho" class="area-btn bg-white card-appear rounded-xl p-3 text-center shadow-sm">
+        <div class="text-sm font-semibold text-yellow-600">Cofrinho</div>
+      </button>
+      <button data-area="emergencia" class="area-btn bg-white card-appear rounded-xl p-3 text-center shadow-sm">
+        <div class="text-sm font-semibold text-red-600">Emergência</div>
+      </button>
+      <button data-area="fixas" class="area-btn bg-white card-appear rounded-xl p-3 text-center shadow-sm">
+        <div class="text-sm font-semibold text-blue-600">Fixas</div>
+      </button>
+      <button data-area="variaveis" class="area-btn bg-white card-appear rounded-xl p-3 text-center shadow-sm">
+        <div class="text-sm font-semibold text-green-600">Variáveis</div>
+      </button>
+    </div>
+  </nav>
 
-  <!-- Filtros -->
-  <div class="bg-white shadow-md rounded-2xl w-full p-3 mt-4 flex gap-2 items-center overflow-x-auto">
-    <select id="filtroPeriodo" class="border p-2 rounded text-sm">
+  <!-- Filtros (mês e busca) -->
+  <div class="mb-3 flex gap-2">
+    <select id="periodoFilter" class="flex-1 border rounded-lg p-2 text-sm">
       <option value="all">Todos os meses</option>
     </select>
-
-    <select id="filtroCategoria" class="border p-2 rounded text-sm">
-      <option value="all">Todas as categorias</option>
-    </select>
-
-    <button id="limparFiltros" class="ml-auto bg-gray-200 px-3 py-1 rounded text-sm">Limpar</button>
+    <input id="busca" placeholder="Buscar (descrição)" class="w-36 border rounded-lg p-2 text-sm" />
   </div>
 
-  <!-- Lista -->
-  <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4 max-h-56 overflow-y-auto">
-    <h3 class="font-semibold text-gray-700 mb-2 flex items-center justify-between">
-      <span>Transações</span>
-      <span id="contador" class="text-xs text-gray-500">0</span>
-    </h3>
-    <ul id="lista" class="text-sm text-gray-600 space-y-2"></ul>
-  </div>
+  <main id="mainContent" class="space-y-4">
 
-  <!-- Gráficos e relatório -->
-  <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4">
-    <h3 class="font-semibold text-gray-700 mb-2">Gráfico por Categoria (período filtrado)</h3>
-    <canvas id="graficoPizza" height="150"></canvas>
-  </div>
+    <!-- Lista e controles -->
+    <section id="listaSection" class="bg-white rounded-2xl shadow p-3">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-semibold text-gray-700">Transações</h3>
+        <div class="text-xs text-gray-500" id="contador">0 lançamentos</div>
+      </div>
+      <ul id="lista" class="space-y-2 max-h-56 overflow-y-auto"></ul>
+    </section>
 
-  <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4">
-    <h3 class="font-semibold text-gray-700 mb-2">Ganhos x Gastos (período filtrado)</h3>
-    <canvas id="graficoBarras" height="150"></canvas>
-  </div>
-
-  <div class="bg-white shadow-md rounded-2xl w-full p-4 mt-4 mb-20">
-    <h3 class="font-semibold text-gray-700 mb-2">Relatório detalhado por categoria</h3>
-    <div id="relatorioTabela" class="text-sm text-gray-700"></div>
-  </div>
-
-  <!-- Botão flutuante -->
-  <button id="btnAdd"
-    class="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-full w-14 h-14 text-3xl shadow-lg">
-    +
-  </button>
-
-  <!-- Modal (novo/editar) -->
-  <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white rounded-2xl p-6 w-80">
-      <h3 id="modalTitulo" class="text-lg font-semibold text-center mb-4">Nova Transação</h3>
-
-      <input id="descricao" type="text" placeholder="Descrição"
-        class="border p-2 w-full rounded mb-2" />
-
-      <input id="valor" type="number" step="0.01" placeholder="Valor (R$)"
-        class="border p-2 w-full rounded mb-2" />
-
-      <div class="flex gap-2 mb-2">
-        <select id="tipo" class="border p-2 w-1/2 rounded">
-          <option value="entrada">Entrada</option>
-          <option value="saida">Saída</option>
-        </select>
-
-        <input id="data" type="date" class="border p-2 w-1/2 rounded" />
+    <!-- Gráficos -->
+    <section class="grid grid-cols-1 gap-3">
+      <div class="bg-white rounded-2xl shadow p-3">
+        <div class="flex justify-between items-center mb-2">
+          <h4 class="font-semibold text-gray-700">Resumo (área selecionada)</h4>
+          <div class="text-xs text-gray-500" id="periodLabel">Período: Todos</div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="p-2 bg-gray-50 rounded-lg">
+            <canvas id="chartAreaPie" height="150"></canvas>
+          </div>
+          <div class="p-2 bg-gray-50 rounded-lg">
+            <canvas id="chartAreaBar" height="150"></canvas>
+          </div>
+        </div>
       </div>
 
-      <input id="categoria" type="text" placeholder="Categoria (ex: Mercado)"
-        class="border p-2 w-full rounded mb-4" />
+      <!-- Relatório por categoria/area -->
+      <div class="bg-white rounded-2xl shadow p-3">
+        <h4 class="font-semibold text-gray-700 mb-2">Relatório detalhado</h4>
+        <div id="relatorio" class="text-sm text-gray-600"></div>
+      </div>
+    </section>
 
-      <div class="flex justify-between">
-        <button id="cancelar" class="bg-gray-300 px-4 py-2 rounded">Cancelar</button>
-        <button id="salvar" class="bg-indigo-600 text-white px-4 py-2 rounded">Salvar</button>
+  </main>
+
+  <!-- Botão flutuante -->
+  <button id="btnNovo" class="fixed bottom-6 right-6 bg-indigo-600 text-white rounded-full w-16 h-16 text-3xl shadow-2xl">＋</button>
+
+  <!-- Modal (Adicionar / Editar) -->
+  <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-3xl p-5 shadow-lg">
+      <div class="flex justify-between items-center mb-3">
+        <h3 id="modalTitle" class="text-lg font-semibold">Nova transação</h3>
+        <button id="closeModal" class="text-gray-400">✕</button>
+      </div>
+
+      <div class="space-y-2">
+        <input id="inputDescricao" placeholder="Descrição" class="w-full border p-2 rounded"/>
+        <div class="flex gap-2">
+          <input id="inputValor" type="number" step="0.01" placeholder="Valor R$" class="flex-1 border p-2 rounded"/>
+          <select id="inputTipo" class="w-32 border p-2 rounded">
+            <option value="entrada">Entrada</option>
+            <option value="saida">Saída</option>
+          </select>
+        </div>
+
+        <div class="flex gap-2">
+          <select id="inputArea" class="flex-1 border p-2 rounded">
+            <option value="geral">Geral</option>
+            <option value="cofrinho">Cofrinho</option>
+            <option value="emergencia">Reserva Emergência</option>
+            <option value="fixas">Despesas Fixas</option>
+            <option value="variaveis">Despesas Variáveis</option>
+          </select>
+          <input id="inputData" type="date" class="w-40 border p-2 rounded"/>
+        </div>
+
+        <input id="inputCategoria" placeholder="Categoria (opcional)" class="w-full border p-2 rounded"/>
+
+        <div class="flex justify-between items-center mt-3">
+          <button id="btnCancelar" class="px-4 py-2 rounded bg-gray-100">Cancelar</button>
+          <div class="flex gap-2">
+            <button id="btnDeletar" class="px-4 py-2 rounded bg-red-50 text-red-600 hidden">Excluir</button>
+            <button id="btnSalvar" class="px-4 py-2 rounded bg-indigo-600 text-white">Salvar</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
 <script>
-/* --------------- armazenamento e estado --------------- */
-const STORAGE_KEY = 'minhas_financas_transacoes_v1';
+/* -------------------- Config / Estado -------------------- */
+const STORAGE_KEY = 'financas_v2_agp';
 let transacoes = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
 
-/* elemento DOM */
-const listaEl = document.getElementById('lista');
-const saldoEl = document.getElementById('saldo');
-const contadorEl = document.getElementById('contador');
-const btnAdd = document.getElementById('btnAdd');
-const modal = document.getElementById('modal');
-const cancelar = document.getElementById('cancelar');
-const salvar = document.getElementById('salvar');
-const descricaoInput = document.getElementById('descricao');
-const valorInput = document.getElementById('valor');
-const tipoInput = document.getElementById('tipo');
-const categoriaInput = document.getElementById('categoria');
-const dataInput = document.getElementById('data');
-const modalTitulo = document.getElementById('modalTitulo');
+/* áreas com cores/títulos */
+const AREAS = {
+  geral: { label: 'Geral', color: '#6366F1' },         // indigo
+  cofrinho: { label: 'Cofrinho', color: '#D97706' },   // amber/dourado
+  emergencia: { label: 'Emergência', color: '#DC2626' },// red
+  fixas: { label: 'Fixas', color: '#2563EB' },         // blue
+  variaveis: { label: 'Variáveis', color: '#16A34A' }  // green
+};
 
-const filtroPeriodo = document.getElementById('filtroPeriodo');
-const filtroCategoria = document.getElementById('filtroCategoria');
-const limparFiltrosBtn = document.getElementById('limparFiltros');
-
-const relatorioTabela = document.getElementById('relatorioTabela');
-
+let areaSelecionada = 'geral';
 let editingIndex = null;
 
-/* Charts */
-let pizzaChart = null;
-let barrasChart = null;
+/* DOM */
+const areaBtns = document.querySelectorAll('.area-btn');
+const saldoGeralEl = document.getElementById('saldoGeral');
+const subSaldosEl = document.getElementById('subSaldos');
+const listaEl = document.getElementById('lista');
+const contadorEl = document.getElementById('contador');
+const periodoFilter = document.getElementById('periodoFilter');
+const buscaInput = document.getElementById('busca');
+const periodLabel = document.getElementById('periodLabel');
+const relatorioEl = document.getElementById('relatorio');
 
-/* Inicialização - define data atual no modal por padrão */
-function dataHojeFormatada() {
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const btnNovo = document.getElementById('btnNovo');
+const closeModal = document.getElementById('closeModal');
+const btnCancelar = document.getElementById('btnCancelar');
+const btnSalvar = document.getElementById('btnSalvar');
+const btnDeletar = document.getElementById('btnDeletar');
+
+const inputDescricao = document.getElementById('inputDescricao');
+const inputValor = document.getElementById('inputValor');
+const inputTipo = document.getElementById('inputTipo');
+const inputArea = document.getElementById('inputArea');
+const inputData = document.getElementById('inputData');
+const inputCategoria = document.getElementById('inputCategoria');
+
+/* Charts */
+let chartPie = null;
+let chartBar = null;
+
+/* -------------------- Utils -------------------- */
+function todayISO() {
   const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-/* --------------- funções principais --------------- */
-
-function salvarLocal() {
+function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(transacoes));
 }
 
-function abrirModalParaNovo() {
-  editingIndex = null;
-  modalTitulo.textContent = 'Nova Transação';
-  descricaoInput.value = '';
-  valorInput.value = '';
-  tipoInput.value = 'saida';
-  categoriaInput.value = '';
-  dataInput.value = dataHojeFormatada();
-  modal.classList.remove('hidden');
-  descricaoInput.focus();
+/* gerar cores repetitivas */
+function generateColors(n) {
+  const palette = ['#4ade80','#60a5fa','#f87171','#facc15','#a78bfa','#fb923c','#34d399','#f97316','#60a5fa','#fda4af'];
+  const out = [];
+  for (let i=0;i<n;i++) out.push(palette[i % palette.length]);
+  return out;
 }
 
-function abrirModalParaEditar(idx) {
-  const t = transacoes[idx];
-  if (!t) return;
-  editingIndex = idx;
-  modalTitulo.textContent = 'Editar Transação';
-  descricaoInput.value = t.descricao;
-  valorInput.value = t.valor;
-  tipoInput.value = t.tipo;
-  categoriaInput.value = t.categoria;
-  // data salva no formato YYYY-MM-DD
-  dataInput.value = t.data || dataHojeFormatada();
+/* retorna transações filtradas por período, área e busca */
+function getFiltered() {
+  const periodo = periodoFilter.value; // 'all' or 'YYYY-MM'
+  const texto = buscaInput.value.trim().toLowerCase();
+  return transacoes.filter(t => {
+    if (areaSelecionada !== 'geral') {
+      if (t.area !== areaSelecionada) return false;
+    } else {
+      // em "Geral" mostramos todas as áreas exceto cofrinho? 
+      // Aqui definimos: Em Geral mostramos transações com area === 'geral'
+      // (transações de cofrinho/emergencia/fixas/variaveis aparecem em suas abas)
+      if (t.area !== 'geral') return false;
+    }
+
+    if (periodo !== 'all') {
+      if (!t.data || !t.data.startsWith(periodo)) return false;
+    }
+
+    if (texto) {
+      if (!t.descricao.toLowerCase().includes(texto) && !(t.categoria||'').toLowerCase().includes(texto)) return false;
+    }
+    return true;
+  });
+}
+
+/* popula select de meses dinamicamente a partir das transações */
+function atualizarPeriodos() {
+  const set = new Set();
+  transacoes.forEach(t => {
+    if (t.data) set.add(t.data.slice(0,7));
+  });
+  const arr = Array.from(set).sort((a,b)=> b.localeCompare(a));
+  periodoFilter.innerHTML = '<option value="all">Todos os meses</option>';
+  arr.forEach(p => {
+    const [y,m] = p.split('-');
+    const date = new Date(`${p}-01`);
+    const label = date.toLocaleString('pt-BR', { month:'short', year:'numeric' }).replace('.', '');
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+    periodoFilter.appendChild(opt);
+  });
+}
+
+/* calcula totais por área e retorna resumo */
+function calcularResumoGlobal() {
+  const resumo = {
+    saldoGeral: 0,
+    porArea: {}
+  };
+  Object.keys(AREAS).forEach(a => resumo.porArea[a] = 0);
+
+  transacoes.forEach(t => {
+    if (t.tipo === 'entrada') {
+      resumo.porArea[t.area] += t.valor;
+      if (t.area === 'geral') resumo.saldoGeral += t.valor;
+    } else {
+      resumo.porArea[t.area] -= t.valor;
+      if (t.area === 'geral') resumo.saldoGeral -= t.valor;
+    }
+  });
+
+  return resumo;
+}
+
+/* atualiza topo (saldo geral e sub-saldos) */
+function atualizarTopo() {
+  const r = calcularResumoGlobal();
+  saldoGeralEl.textContent = `R$ ${r.saldoGeral.toFixed(2)}`;
+  // construir subtítulos com cores
+  const parts = Object.keys(AREAS).map(a => {
+    const v = r.porArea[a];
+    const sign = v >= 0 ? '' : '-';
+    const val = `R$ ${Math.abs(v).toFixed(2)}`;
+    return `<span style="color:${AREAS[a].color}" class="font-medium">${AREAS[a].label}: ${sign}${val}</span>`;
+  });
+  subSaldosEl.innerHTML = parts.join(' • ');
+}
+
+/* renderizar lista de transações da área */
+function renderLista() {
+  const arr = getFiltered();
+  listaEl.innerHTML = '';
+  if (arr.length === 0) {
+    listaEl.innerHTML = '<li class="text-gray-400 text-sm py-2">Nenhuma transação</li>';
+  } else {
+    arr.forEach((t, idx) => {
+      // encontrar índice real na lista original para editar/excluir
+      const idxReal = transacoes.findIndex(tt => tt === t || (
+        tt.descricao === t.descricao && tt.valor === t.valor && tt.tipo === t.tipo &&
+        tt.area === t.area && tt.data === t.data && tt.categoria === t.categoria
+      ));
+
+      const li = document.createElement('li');
+      li.className = 'flex justify-between items-start p-2 rounded-lg hover:bg-gray-50';
+      li.innerHTML = `
+        <div class="flex gap-3 items-start">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:${AREAS[t.area].color}22">
+            <div class="text-xs" style="color:${AREAS[t.area].color}">${AREAS[t.area].label[0]}</div>
+          </div>
+          <div>
+            <div class="font-medium text-gray-700">${t.descricao}</div>
+            <div class="text-xs text-gray-400">${t.categoria || 'Sem categoria'} • ${new Date(t.data).toLocaleDateString('pt-BR')}</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="${t.tipo==='entrada' ? 'text-green-600' : 'text-red-600'} font-semibold">
+            ${t.tipo==='entrada' ? '+' : '-'} R$ ${Number(t.valor).toFixed(2)}
+          </div>
+          <div class="flex gap-1 justify-end mt-2">
+            <button class="text-xs px-2 py-1 rounded bg-indigo-50 text-indigo-600" onclick="abrirEditar(${idxReal})">Editar</button>
+            <button class="text-xs px-2 py-1 rounded bg-red-50 text-red-600" onclick="deletar(${idxReal})">Excluir</button>
+          </div>
+        </div>
+      `;
+      listaEl.appendChild(li);
+    });
+  }
+  contadorEl.textContent = `${arr.length} lançamentos`;
+}
+
+/* calcular totais da área (para gráficos) */
+function calcularTotaisArea() {
+  const arr = getFiltered();
+  let totalEntradas = 0, totalSaidas = 0;
+  const porCategoria = {};
+  arr.forEach(t => {
+    if (t.tipo === 'entrada') totalEntradas += t.valor;
+    else totalSaidas += t.valor;
+    const cat = t.categoria || 'Sem categoria';
+    porCategoria[cat] = (porCategoria[cat] || 0) + t.valor;
+  });
+  return { totalEntradas, totalSaidas, porCategoria };
+}
+
+/* atualizar gráficos (pie por categoria + barras entrada/saída) */
+function atualizarGraficos() {
+  const { totalEntradas, totalSaidas, porCategoria } = calcularTotaisArea();
+
+  // PIE
+  const ctxPie = document.getElementById('chartAreaPie');
+  if (chartPie) chartPie.destroy();
+  const labels = Object.keys(porCategoria);
+  const dataPie = Object.values(porCategoria);
+  chartPie = new Chart(ctxPie, {
+    type: 'pie',
+    data: { labels, datasets: [{ data: dataPie, backgroundColor: generateColors(labels.length) }]},
+    options: { plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: ctx => `R$ ${Number(ctx.raw).toFixed(2)}` }}}}
+  });
+
+  // BAR
+  const ctxBar = document.getElementById('chartAreaBar');
+  if (chartBar) chartBar.destroy();
+  chartBar = new Chart(ctxBar, {
+    type: 'bar',
+    data: {
+      labels: ['Entradas', 'Saídas'],
+      datasets: [{ label: 'R$', data: [totalEntradas, totalSaidas], backgroundColor: [ '#10B981', '#EF4444' ] }]
+    },
+    options: { plugins: { legend: { display: false } } }
+  });
+
+  // relatório detalhado (categoria)
+  const rows = Object.entries(porCategoria).sort((a,b)=>b[1]-a[1]);
+  if (rows.length===0) {
+    relatorioEl.innerHTML = '<div class="text-gray-400 text-sm">Sem dados para exibir.</div>';
+  } else {
+    const total = rows.reduce((s,r)=>s+r[1],0);
+    let html = '<table class="w-full text-sm"><thead class="text-xs text-gray-500"><tr><th>Categoria</th><th class="text-right">Total</th><th class="text-right">%</th></tr></thead><tbody>';
+    rows.forEach(([cat, val]) => {
+      html += `<tr class="border-t"><td class="py-2">${cat}</td><td class="py-2 text-right">R$ ${val.toFixed(2)}</td><td class="py-2 text-right">${(val/total*100).toFixed(1)}%</td></tr>`;
+    });
+    html += `</tbody><tfoot class="border-t font-semibold"><tr><td class="py-2">Total</td><td class="py-2 text-right">R$ ${total.toFixed(2)}</td><td class="py-2 text-right">100%</td></tr></tfoot></table>`;
+    relatorioEl.innerHTML = html;
+  }
+}
+
+/* atualizar tudo */
+function atualizarTudo() {
+  atualizarPeriodos();
+  atualizarTopo();
+  renderLista();
+  atualizarGraficos();
+  save();
+  // label do período
+  periodLabel.textContent = periodoFilter.value === 'all' ? 'Período: Todos' : `Período: ${periodoFilter.options[periodoFilter.selectedIndex].text}`;
+}
+
+/* -------------------- Ações (abrir modal, salvar, editar, deletar) -------------------- */
+function abrirModalNovo() {
+  editingIndex = null;
+  modalTitle.textContent = 'Nova transação';
+  inputDescricao.value = '';
+  inputValor.value = '';
+  inputTipo.value = 'saida';
+  inputArea.value = areaSelecionada || 'geral';
+  inputCategoria.value = '';
+  inputData.value = todayISO();
+  btnDeletar.classList.add('hidden');
   modal.classList.remove('hidden');
-  descricaoInput.focus();
+  setTimeout(()=>inputDescricao.focus(),150);
+}
+
+function abrirEditar(index) {
+  const t = transacoes[index];
+  if (!t) return;
+  editingIndex = index;
+  modalTitle.textContent = 'Editar transação';
+  inputDescricao.value = t.descricao;
+  inputValor.value = t.valor;
+  inputTipo.value = t.tipo;
+  inputArea.value = t.area;
+  inputCategoria.value = t.categoria || '';
+  inputData.value = t.data || todayISO();
+  btnDeletar.classList.remove('hidden');
+  modal.classList.remove('hidden');
+  setTimeout(()=>inputDescricao.focus(),150);
 }
 
 function fecharModal() {
   modal.classList.add('hidden');
 }
 
-function adicionarOuEditar() {
-  const descricao = descricaoInput.value.trim();
-  const valor = parseFloat(valorInput.value);
-  const tipo = tipoInput.value;
-  const categoria = categoriaInput.value.trim() || 'Sem categoria';
-  const data = dataInput.value || dataHojeFormatada();
+/* salvar (novo ou editar) */
+function salvarTransacao() {
+  const desc = inputDescricao.value.trim();
+  const val = parseFloat(inputValor.value);
+  const tipo = inputTipo.value;
+  const area = inputArea.value;
+  const cat = inputCategoria.value.trim();
+  const data = inputData.value || todayISO();
 
-  if (!descricao || !valor || isNaN(valor)) {
-    alert('Preencha descrição e valor corretamente.');
+  if (!desc || isNaN(val) || val <= 0) {
+    alert('Preencha descrição e valor (>0).');
     return;
   }
 
-  const novo = { descricao, valor: Math.abs(valor), tipo, categoria, data };
+  const obj = { descricao: desc, valor: Math.abs(val), tipo, area, categoria: cat, data };
 
   if (editingIndex === null) {
-    transacoes.push(novo);
+    transacoes.push(obj);
   } else {
-    transacoes[editingIndex] = novo;
+    transacoes[editingIndex] = obj;
   }
 
-  salvarLocal();
   fecharModal();
   atualizarTudo();
 }
 
-/* excluir transaction */
-function excluirTransacao(index) {
+/* deletar */
+function deletar(index) {
   if (!confirm('Deseja excluir esta transação?')) return;
-  transacoes.splice(index, 1);
-  salvarLocal();
+  transacoes.splice(index,1);
   atualizarTudo();
+  fecharModal();
 }
 
-/* aplica filtros atuais e retorna lista filtrada */
-function obterTransacoesFiltradas() {
-  const periodo = filtroPeriodo.value; // format: "YYYY-MM" or "all"
-  const categoriaSel = filtroCategoria.value; // category or all
-  return transacoes.filter(t => {
-    let okPeriodo = true;
-    if (periodo !== 'all') {
-      // periodo "YYYY-MM"
-      okPeriodo = t.data && t.data.startsWith(periodo);
-    }
-    let okCategoria = (categoriaSel === 'all') || (t.categoria === categoriaSel);
-    return okPeriodo && okCategoria;
+/* abrir editar via global (onclick) */
+window.abrirEditar = abrirEditar;
+window.deletar = function(i) { deletar(i); };
+
+/* -------------------- Eventos UI -------------------- */
+btnNovo.addEventListener('click', abrirModalNovo);
+closeModal.addEventListener('click', fecharModal);
+btnCancelar.addEventListener('click', fecharModal);
+btnSalvar.addEventListener('click', salvarTransacao);
+btnDeletar.addEventListener('click', () => { if (editingIndex !== null) deletar(editingIndex); });
+
+areaBtns.forEach(b => {
+  b.addEventListener('click', () => {
+    areaBtns.forEach(x => x.classList.remove('ring-2','ring-indigo-200','bg-indigo-50'));
+    b.classList.add('ring-2','ring-indigo-200','bg-indigo-50');
+    areaSelecionada = b.getAttribute('data-area');
+    // ajustar inputArea default
+    inputArea.value = areaSelecionada;
+    atualizarTudo();
   });
-}
-
-/* atualiza selects de filtros com opções dinâmicas */
-function atualizarOpcoesFiltros() {
-  // períodos únicos (YYYY-MM)
-  const periodos = new Set();
-  const categorias = new Set();
-  transacoes.forEach(t => {
-    if (t.data) {
-      const ym = t.data.slice(0,7); // YYYY-MM
-      periodos.add(ym);
-    }
-    categorias.add(t.categoria || 'Sem categoria');
-  });
-
-  // ordena desc por data (mais recente primeiro)
-  const periodosArr = Array.from(periodos).sort((a,b)=> b.localeCompare(a));
-  // clear and rebuild
-  filtroPeriodo.innerHTML = '<option value="all">Todos os meses</option>';
-  periodosArr.forEach(p => {
-    // mostra mês legível: "2025-02" -> "Fev/2025"
-    const [y,m] = p.split('-');
-    const date = new Date(`${p}-01`);
-    const label = date.toLocaleString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '');
-    const opt = document.createElement('option');
-    opt.value = p;
-    opt.textContent = label.charAt(0).toUpperCase() + label.slice(1);
-    filtroPeriodo.appendChild(opt);
-  });
-
-  // categorias
-  const categoriasArr = Array.from(categorias).sort((a,b)=> a.localeCompare(b));
-  filtroCategoria.innerHTML = '<option value="all">Todas as categorias</option>';
-  categoriasArr.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c;
-    opt.textContent = c;
-    filtroCategoria.appendChild(opt);
-  });
-}
-
-/* renderiza a lista na tela (com botões editar/excluir) */
-function renderizarLista() {
-  const arr = obterTransacoesFiltradas();
-  listaEl.innerHTML = '';
-
-  if (arr.length === 0) {
-    listaEl.innerHTML = '<li class="text-gray-400">Nenhuma transação</li>';
-  }
-
-  arr.forEach((t, iFiltered) => {
-    // precisamos do índice original
-    // encontra a primeira ocorrência igual na lista original a partir de um offset
-    // mais simples: percorre transacoes e monta mapping id — mas como não temos id, usamos indexOf com cuidado.
-    // aqui vamos obter o index original buscando o obj por igualdade de campos + primeira combinação
-    const indexOriginal = transacoes.findIndex(tt =>
-      tt.descricao === t.descricao &&
-      tt.valor === t.valor &&
-      tt.tipo === t.tipo &&
-      tt.categoria === t.categoria &&
-      tt.data === t.data
-    );
-
-    const li = document.createElement('li');
-    li.className = 'flex justify-between items-start';
-
-    const left = document.createElement('div');
-    left.className = 'flex flex-col';
-    const descricao = document.createElement('span');
-    descricao.className = 'font-medium text-gray-700';
-    descricao.textContent = t.descricao;
-    const meta = document.createElement('span');
-    meta.className = 'text-xs text-gray-500';
-    const dataFmt = new Date(t.data).toLocaleDateString('pt-BR');
-    meta.textContent = `${t.categoria} • ${dataFmt}`;
-    left.appendChild(descricao);
-    left.appendChild(meta);
-
-    const right = document.createElement('div');
-    right.className = 'flex flex-col items-end gap-1';
-    const valor = document.createElement('span');
-    valor.className = t.tipo === 'entrada' ? 'text-green-500 font-semibold' : 'text-red-500 font-semibold';
-    const sinal = t.tipo === 'entrada' ? '+' : '-';
-    valor.textContent = `${sinal} R$ ${Number(t.valor).toFixed(2)}`;
-
-    const botoes = document.createElement('div');
-    botoes.className = 'flex gap-2 mt-1';
-
-    const btnEditar = document.createElement('button');
-    btnEditar.className = 'text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded';
-    btnEditar.textContent = 'Editar';
-    btnEditar.onclick = () => abrirModalParaEditar(indexOriginal);
-
-    const btnExcluir = document.createElement('button');
-    btnExcluir.className = 'text-xs bg-red-50 text-red-600 px-2 py-1 rounded';
-    btnExcluir.textContent = 'Excluir';
-    btnExcluir.onclick = () => excluirTransacao(indexOriginal);
-
-    botoes.appendChild(btnEditar);
-    botoes.appendChild(btnExcluir);
-
-    right.appendChild(valor);
-    right.appendChild(botoes);
-
-    li.appendChild(left);
-    li.appendChild(right);
-
-    listaEl.appendChild(li);
-  });
-
-  contadorEl.textContent = `${arr.length} lançamentos`;
-}
-
-/* calcular saldo e totais para gráficos */
-function calcularTotais(transacoesFiltradas) {
-  let saldo = 0;
-  let ganhos = 0, gastos = 0;
-  const categorias = {}; // categoria -> soma (tanto entradas quanto saídas como valor absoluto para categoria, mas para saídas mantemos soma de saídas)
-
-  transacoesFiltradas.forEach(t => {
-    if (t.tipo === 'entrada') {
-      saldo += t.valor;
-      ganhos += t.valor;
-    } else {
-      saldo -= t.valor;
-      gastos += t.valor;
-    }
-    categorias[t.categoria] = (categorias[t.categoria] || 0) + t.valor;
-  });
-
-  return { saldo, ganhos, gastos, categorias };
-}
-
-/* atualizar gráficos com dados do filtro */
-function atualizarGraficos() {
-  const fil = obterTransacoesFiltradas();
-  const { saldo, ganhos, gastos, categorias } = calcularTotais(fil);
-
-  // Saldo
-  saldoEl.textContent = `R$ ${saldo.toFixed(2)}`;
-  if (saldo >= 0) {
-    saldoEl.classList.remove('text-red-600');
-    saldoEl.classList.add('text-green-600');
-  } else {
-    saldoEl.classList.remove('text-green-600');
-    saldoEl.classList.add('text-red-600');
-  }
-
-  // Pizza por categoria
-  const ctxPizza = document.getElementById('graficoPizza');
-  if (pizzaChart) pizzaChart.destroy();
-  const labels = Object.keys(categorias);
-  const data = Object.values(categorias);
-  pizzaChart = new Chart(ctxPizza, {
-    type: 'pie',
-    data: {
-      labels,
-      datasets: [{
-        data,
-        backgroundColor: generateColors(labels.length)
-      }]
-    },
-    options: {
-      plugins: {
-        tooltip: { callbacks: { label: ctx => `R$ ${Number(ctx.raw).toFixed(2)}` } }
-      }
-    }
-  });
-
-  // Barras Ganhos x Gastos
-  const ctxBarras = document.getElementById('graficoBarras');
-  if (barrasChart) barrasChart.destroy();
-  barrasChart = new Chart(ctxBarras, {
-    type: 'bar',
-    data: {
-      labels: ['Ganhos', 'Gastos'],
-      datasets: [{
-        label: 'R$',
-        data: [ganhos, gastos],
-        backgroundColor: ['#22c55e', '#ef4444']
-      }]
-    },
-    options: {
-      plugins: { legend: { display: false } }
-    }
-  });
-
-  // relatório detalhado
-  atualizarRelatorioTabela(categorias);
-}
-
-/* monta tabela de relatório por categoria */
-function atualizarRelatorioTabela(categoriasObj) {
-  const rows = Object.entries(categoriasObj).sort((a,b)=> b[1]-a[1]);
-  if (rows.length === 0) {
-    relatorioTabela.innerHTML = '<div class="text-gray-400 text-sm">Sem dados para exibir no período.</div>';
-    return;
-  }
-
-  const total = rows.reduce((s, r) => s + r[1], 0);
-  let html = '<table class="w-full text-sm"><thead><tr class="text-left text-xs text-gray-500"><th>Categoria</th><th class="text-right">Total</th><th class="text-right">%</th></tr></thead><tbody>';
-  rows.forEach(([cat, val]) => {
-    const pct = total === 0 ? 0 : (val/total*100);
-    html += `<tr class="border-t"><td class="py-2">${cat}</td><td class="py-2 text-right">R$ ${Number(val).toFixed(2)}</td><td class="py-2 text-right">${pct.toFixed(1)}%</td></tr>`;
-  });
-  html += `</tbody><tfoot class="border-t"><tr class="font-semibold"><td class="pt-2">Total</td><td class="pt-2 text-right">R$ ${total.toFixed(2)}</td><td class="pt-2 text-right">100%</td></tr></tfoot></table>`;
-
-  relatorioTabela.innerHTML = html;
-}
-
-/* utilitário cores */
-function generateColors(n) {
-  const pal = ['#4ade80','#60a5fa','#f87171','#facc15','#a78bfa','#fb923c','#34d399','#f97316','#60a5fa','#fda4af'];
-  const out = [];
-  for (let i=0;i<n;i++) out.push(pal[i % pal.length]);
-  return out;
-}
-
-/* atualização completa (filtros, lista, gráficos) */
-function atualizarTudo() {
-  // atualiza opções de filtros com base nas transacoes completas
-  atualizarOpcoesFiltros();
-  // renderiza lista de acordo com filtros
-  renderizarLista();
-  // atualiza gráficos de acordo com filtros
-  atualizarGraficos();
-  // salva
-  salvarLocal();
-}
-
-/* limpar filtros */
-function limparFiltros() {
-  filtroPeriodo.value = 'all';
-  filtroCategoria.value = 'all';
-  atualizarTudo();
-}
-
-/* --------------- eventos --------------- */
-
-btnAdd.onclick = abrirModalParaNovo;
-cancelar.onclick = fecharModal;
-salvar.onclick = adicionarOuEditar;
-
-limparFiltrosBtn.onclick = limparFiltros;
-
-filtroPeriodo.onchange = () => {
-  // quando muda mês, reset category selection to 'all' (optionally keep)
-  // manter categoria, apenas atualizar exibição
-  atualizarTudo();
-};
-filtroCategoria.onchange = () => atualizarTudo();
-
-modal.addEventListener('click', (e) => {
-  if (e.target === modal) fecharModal();
 });
 
-/* permite salvar com Enter dentro do modal (quando fóco estiver no input) */
-[descricaoInput, valorInput, categoriaInput, dataInput].forEach(inp => {
-  inp.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter')
+/* filtros */
+periodoFilter.addEventListener('change', atualizarTudo);
+buscaInput.addEventListener('input', () => {
+  // debounce simples
+  clearTimeout(buscaInput._t);
+  buscaInput._t = setTimeout(atualizarTudo, 250);
+});
+
+/* inicial: garantir datas compatibilidade */
+transacoes = transacoes.map(t => {
+  if (!t.data) t.data = todayISO();
+  return t;
+});
+
+/* set default data on input */
+inputData.value = todayISO();
+
+/* inicializar com demo se vazio (opcional) - removível */
+if (transacoes.length === 0) {
+  // Exemplo inicial (comentar se não quiser dados de exemplo)
+  transacoes.push(
+    { descricao: 'Salário', valor: 2500, tipo: 'entrada', area: 'geral', categoria: 'Renda', data: todayISO() },
+    { descricao: 'Aluguel', valor: 700, tipo: 'saida', area: 'fixas', categoria: 'Moradia', data: todayISO() },
+    { descricao: 'Supermercado', valor: 180, tipo: 'saida', area: 'variaveis', categoria: 'Mercado', data: todayISO() },
+    { descricao: 'Poupança - Depósito', valor: 200, tipo: 'entrada', area: 'cofrinho', categoria: 'Poupança', data: todayISO() },
+    { descricao: 'Reserva Emergência - Aplicação', valor: 100, tipo: 'entrada', area: 'emergencia', categoria: 'Reserva', data: todayISO() }
+  );
+  save();
+}
+
+/* marcar botão da área inicial visual */
+document.querySelector('.area-btn[data-area="geral"]').classList.add('ring-2','ring-indigo-200','bg-indigo-50');
+
+/* primeira atualização */
+atualizarTudo();
+
+</script>
+</body>
+</html>
